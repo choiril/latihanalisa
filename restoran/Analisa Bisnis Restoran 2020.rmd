@@ -1,0 +1,159 @@
+---
+title: "Analisa Bisnis Restoran 2020"
+author: "Choiril Abdul"
+date: "3/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set options for R markdown knitting
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(linewidth=80)
+```
+```{r knitr line wrap setup, include=FALSE}
+# set up line wrapping in MD knit output
+library(knitr)
+hook_output = knit_hooks$get("output")
+knit_hooks$set(output = function(x, options)
+{
+  # this hook is used only when the linewidth option is not NULL
+  if (!is.null(n <- options$linewidth))
+  {
+    x = knitr:::split_lines(x)
+    # any lines wider than n should be wrapped
+    if (any(nchar(x) > n))
+      x = strwrap(x, width = n)
+    x = paste(x, collapse = "\n")
+  }
+  hook_output(x, options)
+})
+```
+
+## Persiapan
+Mempersiapkan library dan dataset
+```{r 0 Load Libraries, results = 'hide'}
+library(tidyverse)
+library(data.table)
+library(ggmosaic)
+library(readr)
+
+### Menentukan ft50_clean dataset
+
+filePath <- "dataset/"
+ft50 <- fread(paste0(filePath,"Future50.csv"))
+ip100 <- fread(paste0(filePath,"Independence100.csv"))
+tp250 <- fread(paste0(filePath,"Top250.csv"))
+```
+
+## Eksplorasi Analisis Data
+Untuk memulai analisis data adalah mengerti tentang datanya, pertama cari tipe data yang ada, di R bisa menggunakan str() dan head() melihat 10 data pertama.
+
+### Cek data
+Dengan pengecekan ini kita bisa tipe datanya apakah integer, numeric atau character.
+```{r Cek data}
+#### Cek data
+str(ft50)
+str(ip100)
+str(tp250)
+head(ft50)
+head(ip100)
+head(tp250)
+```
+Setelah melihat tipe data dan datanya, ada beberapa yang perlu diperbaiki. Kita perbaiki satu persatu datasetnya. 
+
+#### Eksplore Future 50
+Kita akan mencoba eksplore data futre 50, yang berisikan perkiraan rangking 50 besar tahun depan berdasarkan data tahun 2020. Melihat data ft50_clean, apakah ada perlu diperbaiki
+
+```{r Melihat data ft50_clean}
+ft50[, .N, Location]
+```
+Dari data tersebut, franchise dan negara bagian masih menjadi satu. Untuk itu perlu pemisahan.
+```{r Pemisahan franchise dan negara bagian}
+ft50_clean <- setDT(ft50)[, paste0(c("City", "State")) := tstrsplit(Location, ", ")]
+```
+Mendapat 2 tabel baru berupa franchise dan negara bagian, pada negara bagian akan dibuat dengan penamaan yang sesuai seperti Calif. menjadi CA.
+```{r Merubah nama Negara bagian}
+#### melihat negara bagian
+ft50_clean[, .N, State]
+#### Merubah negara bagian
+ft50_clean$State <- gsub( "\\.", "", str_squish(str_to_lower(ft50_clean$State)))
+ft50_clean[State == "ar", State := "AR"]
+ft50_clean[State == "ariz", State := "AZ"]
+ft50_clean[State == "ark", State := "AR"]
+ft50_clean[State == "az", State := "AZ"]
+ft50_clean[State == "ca", State := "CA"]
+ft50_clean[State == "calif", State := "CA"]
+ft50_clean[State == "co", State := "CO"]
+ft50_clean[State == "colo", State := "CO"]
+ft50_clean[State == "dc", State := "DC"]
+ft50_clean[State == "fl", State := "FL"]
+ft50_clean[State == "fla", State := "FL"]
+ft50_clean[State == "ga", State := "GA"]
+ft50_clean[State == "ill", State := "IL"]
+ft50_clean[State == "ind", State := "IN"]
+ft50_clean[State == "ky", State := "KY"]
+ft50_clean[State == "mass", State := "MA"]
+ft50_clean[State == "mich", State := "MI"]
+ft50_clean[State == "mo", State := "MO"]
+ft50_clean[State == "nc", State := "NC"]
+ft50_clean[State == "ne", State := "NE"]
+ft50_clean[State == "neb", State := "NE"]
+ft50_clean[State == "nj", State := "NJ"]
+ft50_clean[State == "ny", State := "NY"]
+ft50_clean[State == "nev", State := "NV"]
+ft50_clean[State == "oh", State := "OH"]
+ft50_clean[State == "ohio", State := "OH"]
+ft50_clean[State == "or", State := "OR"]
+ft50_clean[State == "ore", State := "OR"]
+ft50_clean[State == "pa", State := "PA"]
+ft50_clean[State == "sc", State := "SC"]
+ft50_clean[State == "tenn", State := "TN"]
+ft50_clean[State == "texas", State := "TX"]
+ft50_clean[State == "tn", State := "TN"]
+ft50_clean[State == "tx", State := "TX"]
+ft50_clean[State == "va", State := "VA"]
+ft50_clean[State == "wa", State := "WA"]
+ft50_clean[State == "wash", State := "WA"]
+```
+Selanjutnya, merubah YOY Sales dan YOY Unit dari char ke num.
+```{r Merubah char ke num}
+lo2 <- data.frame(ft50_clean)
+ft50_clean$YOY_Units <- sub("%", "", ft50_clean$YOY_Units)
+ft50_clean$YOY_Sales <- sub("%", "", ft50_clean$YOY_Sales)
+ft50_clean <-
+  ft50_clean %>%
+  mutate(YOY_Sales = as.numeric(YOY_Sales),
+         YOY_Units = as.numeric(YOY_Units))
+names(ft50_clean)[5] <- "YOY_Sales(%)"
+names(ft50_clean)[7] <- "YOY_Units(%)"
+ft50_clean <- ft50_clean[,c(1,2,3,10,11,4:9)]
+ft50_clean <- select(ft50_clean, -Location)
+```
+Data sudah clean, selanjutnya mencoba melihat ringkasan data ft50.
+```{r ringkasan data}
+### Cek tipe data
+str(ft50_clean)
+### Ringkasan data
+summary(ft50_clean)
+### Cek data null
+sum(is.na(ft50_clean))
+```
+Ternyata tidak ada data yang null, selanjutnya mari membuat grafik dari data ft50.
+
+### Membuat plot
+1. Mari kita cek, berapa persen Restoran yang Franchising dalam future 50 ini?
+```{r cek franchise yang memiliki restoran terbanyak futrue 50}
+franchise <- data.frame(sort(table(ft50_clean$Franchising),decreasing = TRUE ))
+setnames(franchise,c("Franchising","Jumlah"))
+
+pct <- round(100*franchise$Jumlah/sum(franchise$Jumlah))
+
+ggplot(data = franchise, aes(x = "", y = -Jumlah, 
+                           fill = Franchising)) + 
+  geom_bar(stat = "identity", color = "black") + 
+  labs(title = "Persentase Restoran Franchise") +
+  coord_polar("y") +
+  geom_text(aes(label =paste0(pct, "%")), position = position_stack(vjust = 0.5)) +
+  theme_void()
+```
+Dari pie chart dapat diketahui bahwa 58% Restoran dalam yang masuk future 50 adalah restoran franchising dan sisanya 48% adalah restoran yang independen.
