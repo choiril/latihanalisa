@@ -1,10 +1,17 @@
 ---
 title: "Analisa Bisnis Restoran 2020"
 author: "Choiril Abdul"
-date: "3/13/2021"
+mainfont: Roboto
+monofont: Consolas
 output:
-  pdf_document: default
-  html_document: default
+  pdf_document:
+    df_print: default
+    highlight: espresso
+    keep_tex: yes
+    latex_engine: xelatex
+header-includes:
+  \usepackage{fvextra}
+  \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
 ---
 
 ```{r setup, include=FALSE}
@@ -39,7 +46,7 @@ library(data.table)
 library(ggmosaic)
 library(readr)
 
-### Menentukan ft50_clean dataset
+### Menentukan dataset
 
 filePath <- "dataset/"
 ft50 <- fread(paste0(filePath,"Future50.csv"))
@@ -52,8 +59,7 @@ Untuk memulai analisis data adalah mengerti tentang datanya, pertama cari tipe d
 
 ### Cek data
 Dengan pengecekan ini kita bisa tipe datanya apakah integer, numeric atau character.
-```{r Cek data}
-#### Cek data
+```{r Cek semua data}
 str(ft50)
 str(ip100)
 str(tp250)
@@ -63,21 +69,22 @@ head(tp250)
 ```
 Setelah melihat tipe data dan datanya, ada beberapa yang perlu diperbaiki. Kita perbaiki satu persatu datasetnya. 
 
-#### Eksplore Future 50
-Kita akan mencoba eksplore data futre 50, yang berisikan perkiraan rangking 50 besar tahun depan berdasarkan data tahun 2020. Melihat data ft50_clean, apakah ada perlu diperbaiki
+### Eksplore Future 50
+Kita akan mencoba eksplore data futre 50, yang berisikan perkiraan rangking 50 besar tahun depan berdasarkan data tahun 2020. Melihat data ft50, ternyata ada bebrapa kolom yang yang harus diperbaiki, seperti pemisahan data dan perubahan tipe data.
 
-```{r Melihat data ft50_clean}
+```{r Melihat data lokasi ft50}
 ft50[, .N, Location]
 ```
-Dari data tersebut, franchise dan negara bagian masih menjadi satu. Untuk itu perlu pemisahan.
-```{r Pemisahan franchise dan negara bagian}
+Dari data tersebut, negara bagian masih menjadi satu. Untuk itu perlu pemisahan.
+
+```{r Pemisahan kota dan negara bagian}
 ft50_clean <- setDT(ft50)[, paste0(c("City", "State")) := tstrsplit(Location, ", ")]
 ```
 Mendapat 2 tabel baru berupa franchise dan negara bagian, pada negara bagian akan dibuat dengan penamaan yang sesuai seperti Calif. menjadi CA.
 ```{r Merubah nama Negara bagian}
-#### melihat negara bagian
+### melihat negara bagian
 ft50_clean[, .N, State]
-#### Merubah negara bagian
+### Merubah negara bagian
 ft50_clean$State <- gsub( "\\.", "", str_squish(str_to_lower(ft50_clean$State)))
 ft50_clean[State == "ar", State := "AR"]
 ft50_clean[State == "ariz", State := "AZ"]
@@ -119,15 +126,12 @@ ft50_clean[State == "wash", State := "WA"]
 ```
 Selanjutnya, merubah YOY Sales dan YOY Unit dari char ke num.
 ```{r Merubah char ke num}
-lo2 <- data.frame(ft50_clean)
 ft50_clean$YOY_Units <- sub("%", "", ft50_clean$YOY_Units)
 ft50_clean$YOY_Sales <- sub("%", "", ft50_clean$YOY_Sales)
 ft50_clean <-
   ft50_clean %>%
   mutate(YOY_Sales = as.numeric(YOY_Sales),
          YOY_Units = as.numeric(YOY_Units))
-names(ft50_clean)[5] <- "YOY_Sales(%)"
-names(ft50_clean)[7] <- "YOY_Units(%)"
 ft50_clean <- ft50_clean[,c(1,2,3,10,11,4:9)]
 ft50_clean <- select(ft50_clean, -Location)
 ```
@@ -140,10 +144,11 @@ summary(ft50_clean)
 ### Cek data null
 sum(is.na(ft50_clean))
 ```
-Ternyata tidak ada data yang null, selanjutnya mari membuat grafik dari data ft50.
+Ternyata tidak ada data yang null, selanjutnya mari membuat grafik dari data ft50. Dengan rata-rata penjualannya adalah 33.78 dan rata-rata YOY Sales selama 2019-2020 adalah 33.70 dan rata-rata unitnya adalag 34.7.
 
 ### Membuat plot
-1. Mari kita cek, berapa persen Restoran yang Franchising dalam future 50 ini?
+
+Mari kita cek, berapa persen Restoran yang Franchising dalam future 50 ini?
 ```{r cek franchise yang memiliki restoran terbanyak futrue 50}
 franchise <- data.frame(sort(table(ft50_clean$Franchising),decreasing = TRUE ))
 setnames(franchise,c("Franchising","Jumlah"))
@@ -158,4 +163,88 @@ ggplot(data = franchise, aes(x = "", y = -Jumlah,
   geom_text(aes(label =paste0(pct, "%")), position = position_stack(vjust = 0.5)) +
   theme_void()
 ```
-Dari pie chart dapat diketahui bahwa 58% Restoran dalam yang masuk future 50 adalah restoran franchising dan sisanya 48% adalah restoran yang independen.
+
+Dari pie chart dapat diketahui bahwa 58% Restoran dalam yang masuk future 50 adalah restoran waralaba dan sisanya 48% adalah bukan waralaba.
+
+Selanjutnya kita lihat perbandingan total YOY Sales antara Restoran Franchise dan tidak.
+
+```{r plot YOY Sales Franchising or Not}
+yoysalesbyfranchise <- aggregate(ft50_clean$YOY_Sales, by=list(franchising=ft50_clean$Franchising), FUN=sum)
+setnames(yoysalesbyfranchise,c("Franchising","Total_YOY_Sales"))
+
+ggplot(yoysalesbyfranchise, aes(x=Franchising, y=Total_YOY_Sales, fill=Franchising)) +
+  labs(title="Total YOY Sales Franchising or Not",
+        x ="Franchising", y = "Total YOY Sales") +
+  geom_bar(stat="identity", position=position_dodge()) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Dari grafik tersebut, restoran yang masuk Future 50 mengindikasikan bahwa Restoran Waralaba memiliki penjualan yang cukup banyak selama pandemi ini.
+
+### Eksplore Independence 100
+Sekarang kita coba eksplorasi 100 restoran independen. Tapi sebelum kita lakukan cleansing data terlebih dahulu.
+```{r Cek data}
+### Cek data
+str(ip100)
+head(ip100)
+```
+Ternyata negara bagian masih menggunkan singkatan yang kurang sesuai dengan singakatan standarnya, markicek, mari kita cek.
+```{r state}
+### Cek data
+ip100[, .N, State]
+```
+
+Ada 19 negara bagian yang harus di cleansing.
+```{r cleansing negara bagaian}
+ip100_clean <- ip100
+ip100_clean$State <- gsub( "\\.", "", str_squish(str_to_lower(ip100$State)))
+ip100_clean[State == "calif", State := "CA"]
+ip100_clean[State == "colo", State := "CO"]
+ip100_clean[State == "dc", State := "DC"]
+ip100_clean[State == "fla", State := "FL"]
+ip100_clean[State == "ga", State := "GA"]
+ip100_clean[State == "ill", State := "IL"]
+ip100_clean[State == "ind", State := "IN"]
+ip100_clean[State == "mass", State := "MA"]
+ip100_clean[State == "mich", State := "MI"]
+ip100_clean[State == "mo", State := "MO"]
+ip100_clean[State == "nc", State := "NC"]
+ip100_clean[State == "nj", State := "NJ"]
+ip100_clean[State == "ny", State := "NY"]
+ip100_clean[State == "nev", State := "NV"]
+ip100_clean[State == "ore", State := "OR"]
+ip100_clean[State == "pa", State := "PA"]
+ip100_clean[State == "tenn", State := "TN"]
+ip100_clean[State == "texas", State := "TX"]
+ip100_clean[State == "va", State := "VA"]
+```
+
+Setelah cleansing, kita lihat summary datanya.
+
+``` {r summarry data}
+summary(ip100_clean)
+```
+
+Rata-rata penjualan dari 100 Restoran Independen adalah 17833434 dengan penjualan paling sedikit 11391678 dan penjualan paling banyak 39080335. Dan rata-rata menyajikan makanan sebanyak 317167.
+
+### Membuat plot Independen 100
+</br>
+
+
+Histogram persebaran 100 Restoran independen di Amerika Serikat.
+```{r plot persebaran restoran indpenden 100}
+sebar <- data.frame(sort(table(ip100_clean$State),decreasing = TRUE ))
+setnames(sebar,c("State","Jumlah"))
+
+ggplot(sebar, aes(x=State, y=Jumlah, fill=State)) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  theme(legend.position="none", plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(type = "seq", palette = "Spectral")
+
+salesny <-
+  ip100_clean %>%
+  filter(State == "NY")
+mean(salesny$Sales)
+```
+
+Dari grafik tersebut, sebanyak 21 Restoran independen berada di New York dengan rata-rata penjualan 19355896.
