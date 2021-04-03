@@ -2,16 +2,17 @@
 title: "Analisa Bisnis Restoran 2020"
 author: "Choiril Abdul"
 mainfont: Roboto
-monofont: Consolas
 output:
+  html_document:
+    df_print: paged
   pdf_document:
     df_print: default
     highlight: espresso
     keep_tex: yes
     latex_engine: xelatex
-header-includes:
-  \usepackage{fvextra}
-  \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+monofont: Consolas
+header-includes: \usepackage{fvextra} \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+always_allow_html: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -43,8 +44,9 @@ Mempersiapkan library dan dataset
 ```{r 0 Load Libraries, results = 'hide'}
 library(tidyverse)
 library(data.table)
-library(ggmosaic)
 library(readr)
+library(sunburstR)
+library(d3r)
 
 ### Menentukan dataset
 
@@ -80,7 +82,7 @@ Dari data tersebut, negara bagian masih menjadi satu. Untuk itu perlu pemisahan.
 ```{r Pemisahan kota dan negara bagian}
 ft50_clean <- setDT(ft50)[, paste0(c("City", "State")) := tstrsplit(Location, ", ")]
 ```
-Mendapat 2 tabel baru berupa franchise dan negara bagian, pada negara bagian akan dibuat dengan penamaan yang sesuai seperti Calif. menjadi CA.
+Mendapat 2 tabel baru berupa kota dan negara bagian, pada negara bagian akan dibuat dengan penamaan yang sesuai seperti Calif. menjadi CA.
 ```{r Merubah nama Negara bagian}
 ### melihat negara bagian
 ft50_clean[, .N, State]
@@ -144,7 +146,7 @@ summary(ft50_clean)
 ### Cek data null
 sum(is.na(ft50_clean))
 ```
-Ternyata tidak ada data yang null, selanjutnya mari membuat grafik dari data ft50. Dengan rata-rata penjualannya adalah 33.78 dan rata-rata YOY Sales selama 2019-2020 adalah 33.70 dan rata-rata unitnya adalag 34.7.
+Ternyata tidak ada data yang null, selanjutnya mari membuat grafik dari data ft50. Dengan rata-rata penjualannya adalah 33.78 dan rata-rata YOY Sales selama 2019-2020 adalah 33.70% dan rata-rata pertumbuhan cabang 34.7% setiap restoran.
 
 ### Membuat plot
 
@@ -180,6 +182,7 @@ ggplot(yoysalesbyfranchise, aes(x=Franchising, y=Total_YOY_Sales, fill=Franchisi
 ```
 
 Dari grafik tersebut, restoran yang masuk Future 50 mengindikasikan bahwa Restoran Waralaba memiliki penjualan yang cukup banyak selama pandemi ini.
+
 
 ### Eksplore Independence 100
 Sekarang kita coba eksplorasi 100 restoran independen. Tapi sebelum kita lakukan cleansing data terlebih dahulu.
@@ -228,8 +231,6 @@ summary(ip100_clean)
 Rata-rata penjualan dari 100 Restoran Independen adalah 17833434 dengan penjualan paling sedikit 11391678 dan penjualan paling banyak 39080335. Dan rata-rata menyajikan makanan sebanyak 317167.
 
 ### Membuat plot Independen 100
-</br>
-
 
 Histogram persebaran 100 Restoran independen di Amerika Serikat.
 ```{r plot persebaran restoran indpenden 100}
@@ -248,3 +249,228 @@ mean(salesny$Sales)
 ```
 
 Dari grafik tersebut, sebanyak 21 Restoran independen berada di New York dengan rata-rata penjualan 19355896.
+
+
+### Eksplore Top 250
+
+Data terakhir dari [Restaurant Business Rankings 2020](https://www.kaggle.com/michau96/restaurant-business-rankings-2020), yaitu data Top 250 yang berisi 250 Restoran yang bagus selama tahun 2020. Mari kita cek datanya.
+```{r Cek data Top 250}
+### Cek data top 250
+str(tp250)
+head(tp250)
+```
+Ternyata ada beberaa yang perlu dicleansing seperti YOY Unit, YOY Sales dan Segemen Kategori. Pertama kita ubah YOY Sales dan YOY Unit.
+```{r Merubah char ke num top 250}
+tp250_clean <- tp250
+tp250_clean$YOY_Units <- sub("%", "", tp250_clean$YOY_Units)
+tp250_clean$YOY_Sales <- sub("%", "", tp250_clean$YOY_Sales)
+tp250_clean <-
+  tp250_clean %>%
+  mutate(YOY_Sales = as.numeric(YOY_Sales),
+         YOY_Units = as.numeric(YOY_Units))
+```
+Kita lihat lagi data segmen kategorinya, berapa banyak segmennya.
+```{r segmen kategori}
+tp250_clean[, .N, Segment_Category]
+```
+Ternyata ada 48 segment category yang harus kita olah agar dapat dianalisa lebih lanjut. Kita buat kolom baru yang berisi kategori dari restoran.
+```{r membuat kategori restoran}
+tp250_clean$Category <- paste(tp250_clean$Segment_Category)
+
+tp250_clean[Category == "Quick Service & Burger", Category := "Burger"]
+tp250_clean[Category == "Quick Service & Coffee Cafe", Category := "Cafe"]
+tp250_clean[Category == "Quick Service & Chicken", Category := "Chicken"]
+tp250_clean[Category == "Quick Service & Mexican", Category := "Mexican"]
+tp250_clean[Category == "Quick Service & Sandwich", Category := "Sandwich"]
+tp250_clean[Category == "Quick Service & Pizza", Category := "Pizza"]
+tp250_clean[Category == "Fast Casual & Bakery Cafe", Category := "Cafe"]
+tp250_clean[Category == "Fast Casual & Mexican", Category := "Mexican"]
+tp250_clean[Category == "Casual Dining & Italian/Pizza", Category := "Pizza"]
+tp250_clean[Category == "Casual Dining & Varied Menu", Category := "Varied Menu"]
+tp250_clean[Category == "Fast Casual & Asian/Noodle", Category := "Asian"]
+tp250_clean[Category == "Quick Service & Frozen Desserts", Category := "Desserts"]
+tp250_clean[Category == "Casual Dining & Sports Bar", Category := "Sports Bar"]
+tp250_clean[Category == "Family Dining & Family Style", Category := "Family"]
+tp250_clean[Category == "Casual Dining & Steak", Category := "Steak"]
+tp250_clean[Category == "Casual Dining & Seafood", Category := "Seafood"]
+tp250_clean[Category == "Fast Casual & Sandwich", Category := "Sandwich"]
+tp250_clean[Category == "Fast Casual & Chicken", Category := "Chicken"]
+tp250_clean[Category == "Quick Service & Family Casual", Category := "Family"]
+tp250_clean[Category == "Fast Casual & Burger", Category := "Burger"]
+tp250_clean[Category == "Casual Dining & Asian", Category := "Asian"]
+tp250_clean[Category == "Quick Service & Snack", Category := "Snack"]
+tp250_clean[Category == "Quick Service & Beverage", Category := "Drinks"]
+tp250_clean[Category == "Quick Service & Seafood", Category := "Seafood"]
+tp250_clean[Category == "Quick Service & Bakery Cafe", Category := "Cafe"]
+tp250_clean[Category == "Fast Casual & Pizza", Category := "Pizza"]
+tp250_clean[Category == "Fine Dining & Steak", Category := "Steak"]
+tp250_clean[Category == "Italian/Pizza", Category := "Pizza"]
+tp250_clean[Category == "Frozen Desserts", Category := "Desserts"]
+tp250_clean[Category == "Coffee Cafe", Category := "Cafe"]
+tp250_clean[Category == "BBQ", Category := "Meat"]
+tp250_clean[Category == "Bakery Cafe", Category := "Cafe"]
+tp250_clean[Category == "Asian/Noodle", Category := "Asian"]
+tp250_clean[Category == "Family Casual", Category := "Family"]
+tp250_clean[Category == "Family Style", Category := "Family"]
+```
+
+Kategori Restoran sudah kita buat, selanjutnya kita akan membuat 2 kolom baru tentang trend penjualan dan cabang apakah negatif atau positif.
+
+```{r trend penjualan dan cabang}
+tp250_clean$Sales_Year <- ifelse(tp250_clean$YOY_Sales > 0, 'Positive', 'Negative')
+tp250_clean$Unit_Stat <- ifelse(tp250_clean$YOY_Units > 0, 'Positive', 'Negative')
+```
+
+Biar terlihat rapi, kita buang beberapa kolom yang terdapat nilai NA. Seperti kolom Content dan Headquarters.
+
+``` {r menghapus kolom content dan headquarters}
+tp250_clean <- select(tp250_clean, -Content, -Headquarters)
+```
+
+Setelah data cleansing, kita lihat summary datanya.
+
+``` {r summary data top 250}
+### Ringkasan data
+summary(tp250_clean)
+### Cek data null
+sum(is.na(tp250_clean))
+```
+Dari data tersebut sudah tidak ada data NA, sedangkan rata-rata penjualannya adalah 1242.7 atau 1243 dan rata-rata cabangnya adalah 850. Langkah selanjutnya adalah membuat grafik dari data Restoran Top 250.
+
+### Membuat plot Top 250
+
+Kita lihat status penjualan YOY Sales selama 2019-2020 dari 250 Restoran.
+
+``` {r perbandingan trend}
+sellstat <- data.frame(sort(table(tp250_clean$Sales_Year),decreasing = TRUE ))
+setnames(sellstat,c("Status_Penjualan","Jumlah"))
+
+pct <- round(100*sellstat$Jumlah/sum(sellstat$Jumlah))
+
+ggplot(data = sellstat, aes(x = "", y = -Jumlah, 
+                           fill = Status_Penjualan)) + 
+  geom_bar(stat = "identity", color = "black") + 
+  labs(title = "Status Penjualan 2020") +
+  coord_polar("y") +
+  geom_text(aes(label =paste0(pct, "%")), position = position_stack(vjust = 0.5)) +
+  theme_void() +
+  scale_fill_manual(values=c("#40E0D0", "#F33A6A"))
+```
+
+
+Dari diagram tersebut, selama 2020 penjualan sebanyak 34% dari 250 restoran penjualannya berstatus negatif atau mengalami penurunan penjualan.
+
+Selanjutnya coba kita lihat kategori dan sub kategori restoran.
+
+``` {r sunbrust}
+sb <- tp250_clean %>%
+  select(Category, Segment_Category, Restaurant) %>%
+  mutate_at(vars(2,3), funs(gsub("-", "", .))) %>%
+  mutate(
+    path = paste(Category, Segment_Category, Restaurant, sep = "-")
+  ) %>%
+  slice(1:250) %>%
+  mutate(
+    V2 = 1
+  )
+
+sunbrst <- sund2b(data = data.frame(xtabs(V2~path, sb)), rootLabel = 'Top 250 Restoran')
+sunbrst
+```
+Agar diagramnya bisa lebih interaktif bisa kalian, bisa menjalkan file Rmarkdown atau export menjadi html. Selanjutnya mari kita cari tahu penjualan 10 besar restoran berdasarkan 5 YOY Sales tertinggi per kategori restoran.
+
+``` {r top 10}
+### Mencari total penjualan
+moresale <- aggregate(tp250_clean$YOY_Sales, .SD[1:10], by=list(Category=tp250_clean$Category), FUN=sum)
+
+chicken <- tp250_clean[Category == "Chicken", .SD[1:10]]
+mexican <- tp250_clean[Category == "Mexican", .SD[1:10]]
+burger <- tp250_clean[Category == "Burger", .SD[1:10]]
+steak <- tp250_clean[Category == "Steak", .SD[1:10]]
+pizza <- tp250_clean[Category == "Pizza", .SD[1:10]]
+
+### Plot
+ggplot(chicken, aes(x= reorder(Restaurant, -Sales), y=Sales, fill=Sales)) +
+  labs(title="Top 10 Chicken Resataurant",
+        x ="Restoran", y = "Total Penjualan") +
+  geom_bar(stat="identity", position=position_dodge()) +
+  scale_fill_gradient(low="#c7a37c",high="#583831") +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(mexican, aes(x= reorder(Restaurant, -Sales), y=Sales, fill=Sales)) +
+  labs(title="Top 10 Mexican Restaurant",
+        x ="Restoran", y = "Total Penjualan") +
+  geom_bar(stat="identity", position=position_dodge()) +
+  scale_fill_gradient(low="#95d800",high="#626cbd") +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(burger, aes(x= reorder(Restaurant, -Sales), y=Sales, fill=Sales)) +
+  labs(title="Top 10 Burger Restairant",
+        x ="Restoran", y = "Total Penjualan") +
+  geom_bar(stat="identity", position=position_dodge()) +
+  scale_fill_gradient(low="#e8a735",high="#8c0004") +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(steak, aes(x= reorder(Restaurant, -Sales), y=Sales, fill=Sales)) +
+  labs(title="Top 10 Steak Restaurant",
+        x ="Restoran", y = "Total Penjualan") +
+  geom_bar(stat="identity", position=position_dodge()) +
+  scale_fill_gradient(low="#428fdd",high="#9758da") +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(pizza, aes(x= reorder(Restaurant, -Sales), y=Sales, fill=Sales)) +
+  labs(title="Top 10 Pizza Restaurant",
+        x ="Restoran", y = "Total Penjualan") +
+  geom_bar(stat="identity", position=position_dodge()) +
+  scale_fill_gradient(low="#ff8888",high="#fc5f5f") +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Selanjutnya kita akan membandingkan berapa banyak Restoran kecil dan Restoran besar pada top 250.
+
+``` {r besar dan kecil}
+tp250_clean$Type <- ifelse(tp250_clean$Units > mean(tp250_clean$Units), 'Besar', 'Kecil')
+
+bisnis <- data.frame(sort(table(tp250_clean$Type),decreasing = TRUE ))
+setnames(bisnis,c("Tipe","Jumlah"))
+
+pct <- round(100*bisnis$Jumlah/sum(bisnis$Jumlah))
+
+ggplot(data = bisnis, aes(x = "", y = -Jumlah, 
+                           fill = Tipe)) + 
+  geom_bar(stat = "identity", color = "black") + 
+  labs(title = "Persentase Jenis Bisnis") +
+  coord_polar("y") +
+  geom_text(aes(label =paste0(pct, "%")), position = position_stack(vjust = 0.5)) +
+  theme_void() +
+  scale_fill_brewer(palette = "Accent") +
+  theme(plot.title = element_text(hjust = 0.5), legend.position="right")
+```
+Dari diagram tersebut, dapat kita ketahui bahwa selama pandemi Restoran skala kecil sebanyak 206 restoran masih dapat survive dan masuk kedalam top 250.
+
+
+## Kesimpulan
+
+1. Restoran waralaba bisa dikatakan bisnis cukup menjanjikan selama pandemi dan kedepannya, hal ini di dukung dengan masuknya 29 restoran waralaba ke dalam future 50. Hal ini juga didukung dengan data YOY Salesnya yang cukup tinggi selama pandemi yaitu 1073.
+
+2. Meskipun begitu, restoran non-waralaba atau independen rata-rata melakukan penjualan selama pandemi sebanyak 17833434. Dan rata-rata menyajikan makanan sebanyak 317167.
+
+3. Basis 100 restoran indepen terdapat pada New York, disana terdapat 21 restoran dengan rata-rata penjualan 19355896.
+
+3. Dari 250 restoran, selama pandemi tren penjualan adalah positif. Hanya 34% yang mengalami tren negatif.
+
+4. Top 250 Restoran memiliki 18 kategori dan 5 kategori yang memiliki YOY Sales tertinggi adalah chicken, mexican, burger, steak dan pizza.
+
+5. Dari 5 kategori menu tersebut, berikut 5 restoran yang banyak penjualannya:
+    
+    a) Chicken: Chick-fil-A
+    
+    b) Mexican: Taco Bell
+    
+    c) Burger: McDonald's
+    
+    d) Steak: Texas Roadhouse
+    
+    e) Pizza: Dominos
+
+6. Dan dari top 250 restoran, bisnis kecil masih menguasi pasar restoran dengan persentase sebanyak 82%.
